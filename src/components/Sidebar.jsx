@@ -17,6 +17,7 @@ export default function Sidebar({ children }) {
     { name: 'Clientes', path: '/clientes', icon: <Users size={20}/> },
     { name: 'Produtos', path: '/produtos', icon: <Package size={20}/> },
     { name: 'Venda (PDV)', path: '/vendas', icon: <ShoppingCart size={20}/> },
+    { name: 'Histórico', path: '/historico', icon: <LayoutDashboard size={20}/> },
   ];
 
   return (

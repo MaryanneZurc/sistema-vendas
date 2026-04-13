@@ -6,6 +6,7 @@ import Clientes from './pages/Clientes';
 import Produtos from './pages/Produtos'; 
 import Dashboard from './pages/Dashboard';
 import Vendas from './pages/Vendas';
+import Historico from './pages/Historico';
 
 // Componente para proteger rotas e envolver com a Sidebar
 const PrivateLayout = ({ children }) => {
@@ -46,6 +47,7 @@ function App() {
     <Vendas />
   </PrivateLayout>
 } />
+<Route path="/historico" element={<PrivateLayout><Historico /></PrivateLayout>} />
          
         </Routes>
       </BrowserRouter>
