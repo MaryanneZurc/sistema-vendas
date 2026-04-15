@@ -1,109 +1,125 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { Calendar, User, CreditCard, Receipt, Search } from 'lucide-react';
+import { supabase } from "../lib/supabaseClient";
 
 export default function Historico() {
   const [vendas, setVendas] = useState([]);
-  const [busca, setBusca] = useState(''); // Estado para o texto da busca
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchVendas();
   }, []);
 
   async function fetchVendas() {
-    const { data } = await supabase
-      .from('vendas')
-      .select(`
-        id, 
-        total, 
-        forma_pagamento, 
-        created_at,
-        clientes ( nome )
-      `)
-      .order('created_at', { ascending: false });
-    
-    setVendas(data || []);
+    try {
+      setLoading(true);
+      // Buscamos todas as vendas, incluindo as canceladas, para auditoria
+      const { data, error } = await supabase
+        .from('vendas')
+        .select(`
+          *,
+          clientes ( nome )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setVendas(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // Lógica de filtragem em tempo real
-  const vendasFiltradas = vendas.filter(v => {
-    const nomeCliente = v.clientes?.nome?.toLowerCase() || '';
-    const pagamento = v.forma_pagamento?.toLowerCase() || '';
-    const termo = busca.toLowerCase();
+  async function handleCancelarVenda(id) {
+    const confirmacao = window.confirm("⚠️ ATENÇÃO: Esta venda será marcada como CANCELADA. O registro permanecerá no sistema para fins de auditoria, mas o status será alterado. Confirmar?");
     
-    return nomeCliente.includes(termo) || pagamento.includes(termo);
-  });
+    if (confirmacao) {
+      const { error } = await supabase
+        .from('vendas')
+        .update({ status: 'cancelado' })
+        .eq('id', id);
+
+      if (error) {
+        alert("Erro ao cancelar venda: " + error.message);
+      } else {
+        fetchVendas(); // Atualiza a lista para mostrar o efeito visual de cancelado
+      }
+    }
+  }
+
+  if (loading) return <div className="p-8 text-center">Carregando histórico de transações...</div>;
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Receipt className="text-blue-600" /> Histórico de Vendas
-          </h1>
-          <p className="text-sm text-gray-500">Consulte e filtre todas as transações realizadas</p>
-        </div>
-
-        {/* Barra de Busca Estilizada */}
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input 
-            type="text"
-            placeholder="Buscar por cliente ou pagamento..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-        </div>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">📜 Histórico de Vendas</h1>
+        <span className="text-sm text-gray-500">{vendas.length} transações registradas</span>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-100">
+      <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-bold">
             <tr>
-              <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
-              <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Cliente</th>
-              <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Pagamento</th>
-              <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Total</th>
+              <th className="p-4 border-b">Data</th>
+              <th className="p-4 border-b">Cliente</th>
+              <th className="p-4 border-b">Total</th>
+              <th className="p-4 border-b">Status</th>
+              <th className="p-4 border-b text-center">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {vendasFiltradas.length > 0 ? (
-              vendasFiltradas.map((v) => (
-                <tr key={v.id} className="hover:bg-blue-50/30 transition-colors">
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} className="text-gray-400" />
-                      {new Date(v.created_at).toLocaleString('pt-BR')}
-                    </div>
+          <tbody>
+            {vendas.map((venda) => {
+              const isCancelada = venda.status === 'cancelado';
+
+              return (
+                <tr 
+                  key={venda.id} 
+                  className={`border-b transition-colors ${isCancelada ? 'bg-gray-50 text-gray-400' : 'hover:bg-blue-50 text-gray-700'}`}
+                >
+                  <td className="p-4">
+                    {new Date(venda.created_at).toLocaleString('pt-BR')}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-700 uppercase">
-                    <div className="flex items-center gap-2">
-                      <User size={14} className="text-gray-400" />
-                      {v.clientes?.nome || 'Consumidor'}
-                    </div>
+                  <td className={`p-4 font-medium ${isCancelada ? 'line-through' : ''}`}>
+                    {venda.clientes?.nome || "Consumidor Final"}
                   </td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${
-                      v.forma_pagamento === 'Pix' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <CreditCard size={12} /> {v.forma_pagamento}
-                    </span>
+                  <td className={`p-4 font-bold ${isCancelada ? 'line-through' : 'text-green-600'}`}>
+                    R$ {Number(venda.total || 0).toFixed(2)}
                   </td>
-                  <td className="px-6 py-4 text-sm font-black text-gray-800 text-right">
-                    R$ {Number(v.total).toFixed(2)}
+                  <td className="p-4">
+                    {isCancelada ? (
+                      <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-[10px] font-black uppercase">
+                        Cancelada
+                      </span>
+                    ) : (
+                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-black uppercase">
+                        Concluída
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-4 text-center">
+                    {!isCancelada ? (
+                      <button 
+                        onClick={() => handleCancelarVenda(venda.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-2"
+                        title="Cancelar Venda"
+                      >
+                        🚫 Cancelar
+                      </button>
+                    ) : (
+                      <span className="text-xs italic text-gray-300">Indisponível</span>
+                    )}
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="4" className="px-6 py-10 text-center text-gray-400">
-                  Nenhuma venda encontrada para "{busca}"
-                </td>
-              </tr>
-            )}
+              );
+            })}
           </tbody>
         </table>
+
+        {vendas.length === 0 && (
+          <div className="p-10 text-center text-gray-500 italic">
+            Nenhuma venda encontrada no banco de dados.
+          </div>
+        )}
       </div>
     </div>
   );
